@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>
+      Global City Demographics Dashboard — Ethnic Composition Projections
+      2025–2100
+    </title>
+    <meta
+      name="description"
+      content="Interactive dashboard showing projected ethnic demographic shifts for 20 major global cities from 2025 to 2100, based on UN, Pew Research, Eurostat, and Census Bureau data."
+    />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌍</text></svg>"
+    />
+  </head>
+  <body>
+    <!-- Loading -->
+    <div class="loading-overlay" id="loading">
+      <div class="loader"></div>
+    </div>
+
+    <!-- Header -->
+    <header class="header">
+      <div class="header-inner">
+        <div class="logo">Demographics 2100</div>
+        <nav class="nav-links">
+          <a href="#explorer" class="active">Explorer</a>
+          <a href="#comparison">Compare</a>
+          <a href="#regions">Regions</a>
+          <a href="#methodology-section">Methodology</a>
+        </nav>
+      </div>
+    </header>
+
+    <!-- Hero -->
+    <section class="hero">
+      <h1>Global City Ethnic Demographics</h1>
+      <p>
+        Projected ethnic composition shifts for 20 major cities worldwide from
+        2025 to 2100 — driven by migration, fertility trends, and generational
+        blending.
+      </p>
+      <div class="hero-stats">
+        <div class="hero-stat">
+          <div class="value">20</div>
+          <div class="label">Cities Tracked</div>
+        </div>
+        <div class="hero-stat">
+          <div class="value">6</div>
+          <div class="label">Continents</div>
+        </div>
+        <div class="hero-stat">
+          <div class="value">75 yrs</div>
+          <div class="label">Projection Span</div>
+        </div>
+        <div class="hero-stat">
+          <div class="value" id="total-pop-stat">—</div>
+          <div class="label">Billion People (2025)</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Main Content -->
+    <div class="container">
+      <!-- Region Tabs -->
+      <div class="region-tabs" id="region-tabs">
+        <button class="region-tab active" data-region="all">All Cities</button>
+        <button class="region-tab" data-region="North America">
+          North America
+        </button>
+        <button class="region-tab" data-region="Europe">Europe</button>
+        <button class="region-tab" data-region="Africa">Africa</button>
+        <button class="region-tab" data-region="Asia">Asia</button>
+        <button class="region-tab" data-region="Oceania">Oceania</button>
+        <button class="region-tab" data-region="South America">
+          South America
+        </button>
+      </div>
+
+      <!-- City Grid -->
+      <div class="city-grid" id="city-grid"></div>
+
+      <!-- Main Visualization -->
+      <section class="viz-section" id="explorer">
+        <div class="section-title">Demographic Explorer</div>
+        <div class="viz-panel">
+          <div class="viz-header">
+            <h2 id="viz-city-name">Select a City</h2>
+            <div class="viz-controls">
+              <button
+                class="viz-btn active"
+                data-chart="stacked"
+                id="btn-stacked"
+              >
+                Stacked Area
+              </button>
+              <button class="viz-btn" data-chart="bar" id="btn-bar">Bar</button>
+              <button class="viz-btn" data-chart="doughnut" id="btn-doughnut">
+                Snapshot
+              </button>
+            </div>
+          </div>
+          <div class="chart-container">
+            <canvas id="main-chart"></canvas>
+          </div>
+
+          <!-- Year snapshot bar -->
+          <div class="snapshot-bar" id="snapshot-bar"></div>
+
+          <!-- Timeline Slider -->
+          <div class="timeline-container">
+            <div class="timeline-labels">
+              <span>2025</span><span>2050</span><span>2075</span
+              ><span>2100</span>
+            </div>
+            <input
+              type="range"
+              class="timeline-slider"
+              id="timeline"
+              min="0"
+              max="15"
+              value="0"
+              step="1"
+            />
+            <div class="current-year-display" id="current-year">2025</div>
+          </div>
+
+          <!-- Legend -->
+          <div class="legend" id="legend"></div>
+        </div>
+      </section>
+
+      <!-- Comparison Section -->
+      <section id="comparison">
+        <div class="section-title">City Comparison</div>
+        <p
+          style="
+            color: var(--text-muted);
+            font-size: 0.88rem;
+            margin-bottom: 1.5rem;
+          "
+        >
+          Click multiple cities above (hold
+          <kbd
+            style="
+              background: var(--bg-glass);
+              padding: 0.15rem 0.4rem;
+              border-radius: 4px;
+              border: 1px solid var(--border-color);
+              font-size: 0.78rem;
+            "
+            >Shift</kbd
+          >) to compare up to 4 cities side by side.
+        </p>
+        <div class="comparison-grid" id="comparison-grid"></div>
+      </section>
+
+      <!-- Regional Overview -->
+      <section id="regions">
+        <div class="section-title">Regional Overview</div>
+        <div class="regional-grid" id="regional-grid"></div>
+      </section>
+
+      <!-- Methodology -->
+      <section id="methodology-section">
+        <div class="methodology" id="methodology">
+          <h2 onclick="toggleMethodology()">Data Sources &amp; Methodology</h2>
+          <div class="methodology-content">
+            <p>
+              This dashboard presents <strong>modeled projections</strong> of
+              ethnic/racial composition for select global cities from 2025 to
+              2100. Projections are interpolated from baseline 2025 estimates
+              and 2100 targets informed by:
+            </p>
+            <ul>
+              <li>
+                <strong>UN World Population Prospects 2022</strong> — country
+                and city population growth trajectories
+              </li>
+              <li>
+                <strong>UN World Urbanization Prospects 2025</strong> — urban
+                population estimates
+              </li>
+              <li>
+                <strong>Pew Research Center</strong> — US Hispanic population
+                projections, racial/ethnic trends
+              </li>
+              <li>
+                <strong>Eurostat</strong> — EU population projections,
+                foreign-born population data
+              </li>
+              <li>
+                <strong>US Census Bureau</strong> — racial and ethnic
+                demographic projections
+              </li>
+              <li>
+                <strong>National statistical agencies</strong> — UK ONS,
+                Statistics Canada, ABS Australia, etc.
+              </li>
+            </ul>
+            <p>
+              <strong>Important caveats:</strong> Precise ethnic composition
+              projections at the city level do not exist from official sources
+              for 2100. These projections are illustrative models based on
+              observable macro-trends including:
+            </p>
+            <ul>
+              <li>Africa's population growth (1.5B → ~3.8B by 2100)</li>
+              <li>
+                European native population decline (EU −6% by 2100 with
+                immigration)
+              </li>
+              <li>US Hispanic population growth (~25% of US by 2050)</li>
+              <li>Increasing multiracial/mixed identification globally</li>
+              <li>Migration-driven diversification of global cities</li>
+              <li>Differential fertility rates across demographic groups</li>
+            </ul>
+            <p>
+              Ethnic categories are simplified and vary by regional context.
+              Actual demographic change will be influenced by policy, economics,
+              climate, and social factors that cannot be predicted with
+              certainty.
+            </p>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <p>Global City Demographics Dashboard — Projections 2025–2100</p>
+      <p style="margin-top: 0.5rem">
+        Data modeled from UN, Pew Research, Eurostat &amp; Census Bureau trends.
+        Not official projections.
+      </p>
+    </footer>
+
+    <script src="data/demographics.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
