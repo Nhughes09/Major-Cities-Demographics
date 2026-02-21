@@ -5,6 +5,8 @@ let currentYearIndex = 0;
 let chartType = 'stacked';
 let mainChart = null;
 let comparisonCharts = {};
+let animationTimer = null;
+let animatingCity = null;
 
 // ─── INIT ───
 document.addEventListener('DOMContentLoaded', () => {
@@ -35,24 +37,130 @@ function renderCityGrid(region) {
     const city = CITIES_DATA[key];
     const d = city.data[currentYearIndex];
     const card = document.createElement('div');
-    card.className = 'city-card' + (key === selectedCity ? ' selected' : '');
+    card.className = 'city-card' + (key === selectedCity ? ' selected' : '') + (key === animatingCity ? ' playing' : '');
     card.dataset.city = key;
     card.style.animationDelay = `${i * 0.04}s`;
 
     const miniBar = Object.entries(d.groups)
       .sort((a, b) => b[1] - a[1])
-      .map(([g, v]) => `<div style="width:${v}%;background:${ETHNIC_COLORS[g] || '#888'}"></div>`)
+      .map(([g, v]) => `<div class="bar-seg" style="width:${v}%;background:${ETHNIC_COLORS[g] || '#888'}" data-group="${g}"></div>`)
       .join('');
 
     card.innerHTML = `
       <h3>${city.name}</h3>
       <div class="country">${city.country}</div>
-      <div class="mini-bar">${miniBar}</div>
-      <div class="pop-label">Population (${d.year})</div>
-      <div class="pop-value">${d.population.toFixed(1)}M</div>
+      <div class="card-year-overlay" id="year-overlay-${key}">${d.year}</div>
+      <div class="card-bar" id="card-bar-${key}">${miniBar}</div>
+      <div class="card-legend" id="card-legend-${key}"></div>
+      <div class="pop-label" id="pop-label-${key}">Population (${d.year})</div>
+      <div class="pop-value" id="pop-value-${key}">${d.population.toFixed(1)}M</div>
+      <div class="play-hint"><span class="play-icon">▶</span> Click to simulate</div>
     `;
     grid.appendChild(card);
   });
+}
+
+// ─── CARD ANIMATION ───
+function stopAnimation() {
+  if (animationTimer) {
+    clearInterval(animationTimer);
+    animationTimer = null;
+  }
+  if (animatingCity) {
+    const card = document.querySelector(`.city-card[data-city="${animatingCity}"]`);
+    if (card) card.classList.remove('playing');
+    animatingCity = null;
+  }
+}
+
+function playProjection(key) {
+  // If already playing this city, stop
+  if (animatingCity === key) {
+    stopAnimation();
+    return;
+  }
+  stopAnimation();
+
+  animatingCity = key;
+  selectedCity = key;
+  const city = CITIES_DATA[key];
+  const card = document.querySelector(`.city-card[data-city="${key}"]`);
+  if (!card) return;
+
+  // highlight
+  document.querySelectorAll('.city-card').forEach(c => {
+    c.classList.remove('selected', 'playing');
+  });
+  card.classList.add('selected', 'playing');
+
+  // update main chart header
+  document.getElementById('viz-city-name').textContent = `${city.name}, ${city.country}`;
+
+  let step = 0;
+  const totalSteps = city.data.length; // 16 steps (0-15)
+
+  function tick() {
+    if (step >= totalSteps || animatingCity !== key) {
+      // finished
+      if (animatingCity === key) {
+        card.classList.remove('playing');
+        card.classList.add('finished');
+        setTimeout(() => card.classList.remove('finished'), 1500);
+        animatingCity = null;
+        animationTimer = null;
+      }
+      return;
+    }
+
+    currentYearIndex = step;
+    const d = city.data[step];
+
+    // Update card bar segments
+    const barEl = document.getElementById(`card-bar-${key}`);
+    if (barEl) {
+      const sorted = Object.entries(d.groups).sort((a, b) => b[1] - a[1]);
+      barEl.innerHTML = sorted.map(([g, v]) =>
+        `<div class="bar-seg" style="width:${v}%;background:${ETHNIC_COLORS[g] || '#888'}" data-group="${g}"></div>`
+      ).join('');
+    }
+
+    // Update card legend
+    const legendEl = document.getElementById(`card-legend-${key}`);
+    if (legendEl) {
+      const sorted = Object.entries(d.groups).sort((a, b) => b[1] - a[1]).slice(0, 3);
+      legendEl.innerHTML = sorted.map(([g, v]) =>
+        `<div class="card-legend-item"><span class="card-legend-dot" style="background:${ETHNIC_COLORS[g] || '#888'}"></span>${g.split('/')[0]} ${v.toFixed(0)}%</div>`
+      ).join('');
+    }
+
+    // Update year overlay
+    const yearEl = document.getElementById(`year-overlay-${key}`);
+    if (yearEl) {
+      yearEl.textContent = d.year;
+      yearEl.classList.add('visible');
+    }
+
+    // Update population
+    const popLabel = document.getElementById(`pop-label-${key}`);
+    const popValue = document.getElementById(`pop-value-${key}`);
+    if (popLabel) popLabel.textContent = `Population (${d.year})`;
+    if (popValue) popValue.textContent = `${d.population.toFixed(1)}M`;
+
+    // Sync timeline slider
+    const slider = document.getElementById('timeline');
+    slider.value = step;
+    document.getElementById('current-year').textContent = d.year;
+
+    // Update main chart & snapshot bar
+    renderMainChart();
+    updateSnapshotBar();
+
+    step++;
+  }
+
+  // Start immediately, then every 400ms
+  tick();
+  animationTimer = setInterval(tick, 400);
 }
 
 // ─── SELECT CITY ───
@@ -281,13 +389,14 @@ function bindEvents() {
     });
   });
 
-  // City click
+  // City click — plays projection animation
   document.getElementById('city-grid').addEventListener('click', e => {
     const card = e.target.closest('.city-card');
     if (!card) return;
     const key = card.dataset.city;
 
     if (e.shiftKey) {
+      stopAnimation();
       if (comparisonCities.includes(key)) {
         comparisonCities = comparisonCities.filter(k => k !== key);
       } else if (comparisonCities.length < 4) {
@@ -298,7 +407,12 @@ function bindEvents() {
         c.classList.toggle('selected', comparisonCities.includes(c.dataset.city) || c.dataset.city === selectedCity);
       });
     } else {
-      selectCity(key);
+      // Play the projection animation
+      playProjection(key);
+      // Scroll chart into view
+      setTimeout(() => {
+        document.getElementById('explorer').scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 200);
     }
   });
 
