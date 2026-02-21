@@ -5,8 +5,8 @@ let currentYearIndex = 0;
 let chartType = 'stacked';
 let mainChart = null;
 let comparisonCharts = {};
-let animationTimer = null;
-let animatingCity = null;
+let expandedCard = null;
+let cardCharts = {};
 
 // ─── INIT ───
 document.addEventListener('DOMContentLoaded', () => {
@@ -27,6 +27,11 @@ function computeTotalPop() {
 
 // ─── CITY GRID ───
 function renderCityGrid(region) {
+  // Destroy any existing card charts
+  Object.values(cardCharts).forEach(c => c.destroy());
+  cardCharts = {};
+  expandedCard = null;
+
   const grid = document.getElementById('city-grid');
   grid.innerHTML = '';
   const keys = region === 'all'
@@ -35,139 +40,132 @@ function renderCityGrid(region) {
 
   keys.forEach((key, i) => {
     const city = CITIES_DATA[key];
-    const d = city.data[currentYearIndex];
+    const d = city.data[0]; // always show 2025 baseline
     const card = document.createElement('div');
-    card.className = 'city-card' + (key === selectedCity ? ' selected' : '') + (key === animatingCity ? ' playing' : '');
+    card.className = 'city-card' + (key === selectedCity ? ' selected' : '');
     card.dataset.city = key;
     card.style.animationDelay = `${i * 0.04}s`;
 
     const miniBar = Object.entries(d.groups)
       .sort((a, b) => b[1] - a[1])
-      .map(([g, v]) => `<div class="bar-seg" style="width:${v}%;background:${ETHNIC_COLORS[g] || '#888'}" data-group="${g}"></div>`)
+      .map(([g, v]) => `<div class="bar-seg" style="width:${v}%;background:${ETHNIC_COLORS[g] || '#888'}"></div>`)
       .join('');
 
     card.innerHTML = `
       <h3>${city.name}</h3>
       <div class="country">${city.country}</div>
-      <div class="card-year-overlay" id="year-overlay-${key}">${d.year}</div>
-      <div class="card-bar" id="card-bar-${key}">${miniBar}</div>
-      <div class="card-legend" id="card-legend-${key}"></div>
-      <div class="pop-label" id="pop-label-${key}">Population (${d.year})</div>
-      <div class="pop-value" id="pop-value-${key}">${d.population.toFixed(1)}M</div>
-      <div class="play-hint"><span class="play-icon">▶</span> Click to simulate</div>
+      <div class="card-bar">${miniBar}</div>
+      <div class="card-info">
+        <span class="pop-value">${d.population.toFixed(1)}M</span>
+        <span class="play-hint">▶ Click to simulate</span>
+      </div>
+      <div class="card-chart-wrap" id="chart-wrap-${key}">
+        <canvas id="card-chart-${key}"></canvas>
+      </div>
     `;
     grid.appendChild(card);
   });
 }
 
-// ─── CARD ANIMATION ───
-function stopAnimation() {
-  if (animationTimer) {
-    clearInterval(animationTimer);
-    animationTimer = null;
-  }
-  if (animatingCity) {
-    const card = document.querySelector(`.city-card[data-city="${animatingCity}"]`);
-    if (card) card.classList.remove('playing');
-    animatingCity = null;
-  }
-}
-
-function playProjection(key) {
-  // If already playing this city, stop
-  if (animatingCity === key) {
-    stopAnimation();
-    return;
-  }
-  stopAnimation();
-
-  animatingCity = key;
-  selectedCity = key;
-  const city = CITIES_DATA[key];
+// ─── EXPAND CARD WITH INLINE CHART ───
+function toggleCardChart(key) {
   const card = document.querySelector(`.city-card[data-city="${key}"]`);
   if (!card) return;
 
-  // highlight
-  document.querySelectorAll('.city-card').forEach(c => {
-    c.classList.remove('selected', 'playing');
-  });
-  card.classList.add('selected', 'playing');
-
-  // update main chart header
-  document.getElementById('viz-city-name').textContent = `${city.name}, ${city.country}`;
-
-  let step = 0;
-  const totalSteps = city.data.length; // 16 steps (0-15)
-
-  function tick() {
-    if (step >= totalSteps || animatingCity !== key) {
-      // finished
-      if (animatingCity === key) {
-        card.classList.remove('playing');
-        card.classList.add('finished');
-        setTimeout(() => card.classList.remove('finished'), 1500);
-        animatingCity = null;
-        animationTimer = null;
-      }
-      return;
+  // If already expanded, collapse it
+  if (expandedCard === key) {
+    card.classList.remove('expanded');
+    if (cardCharts[key]) {
+      cardCharts[key].destroy();
+      delete cardCharts[key];
     }
-
-    currentYearIndex = step;
-    const d = city.data[step];
-
-    // Update card bar segments
-    const barEl = document.getElementById(`card-bar-${key}`);
-    if (barEl) {
-      const sorted = Object.entries(d.groups).sort((a, b) => b[1] - a[1]);
-      barEl.innerHTML = sorted.map(([g, v]) =>
-        `<div class="bar-seg" style="width:${v}%;background:${ETHNIC_COLORS[g] || '#888'}" data-group="${g}"></div>`
-      ).join('');
-    }
-
-    // Update card legend
-    const legendEl = document.getElementById(`card-legend-${key}`);
-    if (legendEl) {
-      const sorted = Object.entries(d.groups).sort((a, b) => b[1] - a[1]).slice(0, 3);
-      legendEl.innerHTML = sorted.map(([g, v]) =>
-        `<div class="card-legend-item"><span class="card-legend-dot" style="background:${ETHNIC_COLORS[g] || '#888'}"></span>${g.split('/')[0]} ${v.toFixed(0)}%</div>`
-      ).join('');
-    }
-
-    // Update year overlay
-    const yearEl = document.getElementById(`year-overlay-${key}`);
-    if (yearEl) {
-      yearEl.textContent = d.year;
-      yearEl.classList.add('visible');
-    }
-
-    // Update population
-    const popLabel = document.getElementById(`pop-label-${key}`);
-    const popValue = document.getElementById(`pop-value-${key}`);
-    if (popLabel) popLabel.textContent = `Population (${d.year})`;
-    if (popValue) popValue.textContent = `${d.population.toFixed(1)}M`;
-
-    // Sync timeline slider
-    const slider = document.getElementById('timeline');
-    slider.value = step;
-    document.getElementById('current-year').textContent = d.year;
-
-    // Update main chart & snapshot bar
-    renderMainChart();
-    updateSnapshotBar();
-
-    step++;
+    expandedCard = null;
+    return;
   }
 
-  // Start immediately, then every 400ms
-  tick();
-  animationTimer = setInterval(tick, 400);
+  // Collapse previous
+  if (expandedCard) {
+    const prev = document.querySelector(`.city-card[data-city="${expandedCard}"]`);
+    if (prev) prev.classList.remove('expanded');
+    if (cardCharts[expandedCard]) {
+      cardCharts[expandedCard].destroy();
+      delete cardCharts[expandedCard];
+    }
+  }
+
+  // Expand this card
+  expandedCard = key;
+  card.classList.add('expanded');
+
+  // Also select it for the main chart
+  selectCity(key);
+
+  // Build stacked bar chart inside card
+  setTimeout(() => {
+    const canvas = document.getElementById(`card-chart-${key}`);
+    if (!canvas) return;
+    const city = CITIES_DATA[key];
+    const years = city.data.map(d => d.year);
+    const groups = Object.keys(city.data[0].groups);
+
+    const datasets = groups.map(g => ({
+      label: g,
+      data: city.data.map(d => d.groups[g] || 0),
+      backgroundColor: ETHNIC_COLORS[g] || '#888',
+      borderColor: 'rgba(0,0,0,0.1)',
+      borderWidth: 0.5,
+      borderSkipped: false,
+    }));
+
+    cardCharts[key] = new Chart(canvas, {
+      type: 'bar',
+      data: { labels: years, datasets },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 800, easing: 'easeOutQuart' },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            mode: 'index', intersect: false,
+            backgroundColor: 'rgba(10,14,26,0.95)',
+            titleColor: '#f0f2f5', bodyColor: '#9ca3af',
+            borderColor: 'rgba(255,255,255,0.1)', borderWidth: 1,
+            padding: 10, cornerRadius: 6,
+            titleFont: { family: 'Inter', size: 12, weight: 600 },
+            bodyFont: { family: 'Inter', size: 11 },
+            callbacks: {
+              title: ctx => `Year ${ctx[0].label}`,
+              label: ctx => `${ctx.dataset.label}: ${ctx.raw.toFixed(1)}%`
+            }
+          }
+        },
+        scales: {
+          x: {
+            stacked: true,
+            grid: { display: false },
+            ticks: { color: '#6b7280', font: { size: 9, family: 'Inter' }, maxRotation: 45 }
+          },
+          y: {
+            stacked: true,
+            max: 100,
+            grid: { color: 'rgba(255,255,255,0.04)' },
+            ticks: { color: '#6b7280', font: { size: 9 }, callback: v => v + '%', stepSize: 25 }
+          }
+        }
+      }
+    });
+  }, 50);
 }
 
 // ─── SELECT CITY ───
 function selectCity(key) {
   selectedCity = key;
   document.querySelectorAll('.city-card').forEach(c => {
-    c.classList.toggle('selected', c.dataset.city === key);
+    const isSelected = c.dataset.city === key;
+    // Don't remove expanded class
+    if (isSelected) c.classList.add('selected');
+    else c.classList.remove('selected');
   });
   const city = CITIES_DATA[key];
   document.getElementById('viz-city-name').textContent = `${city.name}, ${city.country}`;
@@ -353,7 +351,6 @@ function renderRegionalOverview() {
     const totalPop2100 = cityKeys.reduce((s, k) => s + CITIES_DATA[k].data[15].population, 0);
     const growth = ((totalPop2100 - totalPop2025) / totalPop2025 * 100).toFixed(0);
 
-    // find dominant group change
     const agg2025 = {};
     const agg2100 = {};
     cityKeys.forEach(k => {
@@ -389,14 +386,13 @@ function bindEvents() {
     });
   });
 
-  // City click — plays projection animation
+  // City click — expand card with inline stacked bar chart
   document.getElementById('city-grid').addEventListener('click', e => {
     const card = e.target.closest('.city-card');
     if (!card) return;
     const key = card.dataset.city;
 
     if (e.shiftKey) {
-      stopAnimation();
       if (comparisonCities.includes(key)) {
         comparisonCities = comparisonCities.filter(k => k !== key);
       } else if (comparisonCities.length < 4) {
@@ -407,12 +403,7 @@ function bindEvents() {
         c.classList.toggle('selected', comparisonCities.includes(c.dataset.city) || c.dataset.city === selectedCity);
       });
     } else {
-      // Play the projection animation
-      playProjection(key);
-      // Scroll chart into view
-      setTimeout(() => {
-        document.getElementById('explorer').scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 200);
+      toggleCardChart(key);
     }
   });
 
@@ -424,10 +415,6 @@ function bindEvents() {
 
     if (chartType !== 'stacked') renderMainChart();
     updateSnapshotBar();
-
-    // Update active region grid
-    const activeRegion = document.querySelector('.region-tab.active').dataset.region;
-    renderCityGrid(activeRegion);
   });
 
   // Chart type buttons

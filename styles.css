@@ -288,118 +288,68 @@ body {
   margin-bottom: 0.75rem;
 }
 
-/* Animated composition bar */
+/* Composition bar */
 .city-card .card-bar {
   display: flex;
-  height: 24px;
+  height: 20px;
   border-radius: 6px;
   overflow: hidden;
   gap: 1px;
-  transition: height 0.3s ease;
 }
 .city-card .card-bar .bar-seg {
-  transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
   min-width: 2px;
 }
-.city-card.playing .card-bar {
-  height: 32px;
-}
 
-/* Year overlay */
-.city-card .card-year-overlay {
-  font-family: "Outfit", sans-serif;
-  font-size: 2rem;
-  font-weight: 800;
-  color: var(--accent-blue);
-  opacity: 0;
-  height: 0;
-  overflow: hidden;
-  transition: all 0.3s ease;
-  text-align: center;
-  letter-spacing: -0.02em;
-  margin-bottom: 0;
-}
-.city-card.playing .card-year-overlay,
-.city-card .card-year-overlay.visible {
-  opacity: 1;
-  height: 2.8rem;
-  margin-bottom: 0.5rem;
-}
-
-/* Card legend (top 3 groups during animation) */
-.city-card .card-legend {
+/* Card info row */
+.city-card .card-info {
   display: flex;
-  flex-wrap: wrap;
-  gap: 0.4rem;
-  margin-top: 0.5rem;
-  min-height: 0;
-  overflow: hidden;
-  transition: all 0.3s ease;
-}
-.city-card:not(.playing) .card-legend { max-height: 0; opacity: 0; }
-.city-card.playing .card-legend { max-height: 80px; opacity: 1; }
-.card-legend-item {
-  display: flex;
+  justify-content: space-between;
   align-items: center;
-  gap: 0.3rem;
-  font-size: 0.7rem;
-  color: var(--text-secondary);
-  background: var(--bg-glass);
-  padding: 0.15rem 0.5rem;
-  border-radius: 4px;
-}
-.card-legend-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-/* Play hint */
-.city-card .play-hint {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-  font-size: 0.72rem;
-  color: var(--text-muted);
-  margin-top: 0.6rem;
-  opacity: 0;
-  transform: translateY(4px);
-  transition: all 0.25s ease;
-}
-.city-card:hover .play-hint { opacity: 1; transform: translateY(0); }
-.city-card.playing .play-hint { opacity: 0; }
-.play-icon {
-  font-size: 0.6rem;
-  color: var(--accent-blue);
-}
-
-/* Playing state glow */
-.city-card.playing {
-  border-color: var(--accent-blue);
-  box-shadow: 0 0 24px rgba(99, 148, 255, 0.15), 0 0 48px rgba(99, 148, 255, 0.06);
-}
-@keyframes borderPulse {
-  0%, 100% { border-color: var(--accent-blue); }
-  50% { border-color: var(--accent-purple); }
-}
-.city-card.playing {
-  animation: borderPulse 1.5s ease-in-out infinite, fadeIn 0.4s ease-out forwards;
-}
-.city-card.finished {
-  border-color: var(--accent-purple);
-  transition: border-color 1s ease;
-}
-
-.city-card .pop-label {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  margin-top: 0.5rem;
+  margin-top: 0.75rem;
 }
 .city-card .pop-value {
   font-size: 0.9rem;
   font-weight: 600;
   color: var(--text-secondary);
+}
+.city-card .play-hint {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  opacity: 0;
+  transform: translateX(4px);
+  transition: all 0.25s ease;
+}
+.city-card:hover .play-hint {
+  opacity: 1;
+  transform: translateX(0);
+}
+.city-card.expanded .play-hint {
+  opacity: 0;
+}
+
+/* Inline chart area (hidden by default) */
+.city-card .card-chart-wrap {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.3s ease 0.1s;
+}
+.city-card.expanded .card-chart-wrap {
+  max-height: 280px;
+  opacity: 1;
+  margin-top: 1rem;
+}
+.city-card .card-chart-wrap canvas {
+  width: 100% !important;
+  height: 240px !important;
+}
+
+/* Expanded card spans full grid width */
+.city-card.expanded {
+  grid-column: 1 / -1;
+  border-color: var(--accent-blue);
+  box-shadow: 0 0 30px rgba(99, 148, 255, 0.12);
 }
 
 /* ─── MAIN VIZ ─── */
